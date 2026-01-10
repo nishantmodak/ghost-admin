@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Search, ArrowRight, Link2, FileText, ExternalLink } from 'lucide-react'
+import { Search, ArrowRight, Link2, FileText, ExternalLink, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -32,7 +32,10 @@ interface ScanResult {
   posts: PostWithLinks[]
 }
 
+type Step = 'find' | 'replace'
+
 export function LinkScanner() {
+  const [step, setStep] = React.useState<Step>('find')
   const [pattern, setPattern] = React.useState('')
   const [replacement, setReplacement] = React.useState('')
   const [preservePath, setPreservePath] = React.useState(true)
@@ -41,6 +44,7 @@ export function LinkScanner() {
   const [selectedPosts, setSelectedPosts] = React.useState<Set<string>>(new Set())
   const [isPreviewOpen, setIsPreviewOpen] = React.useState(false)
   const [isUpdating, setIsUpdating] = React.useState(false)
+  const [previewData, setPreviewData] = React.useState<PostWithLinks[]>([])
   const { addToast } = useToast()
 
   const handleScan = async () => {
@@ -52,6 +56,7 @@ export function LinkScanner() {
     setIsScanning(true)
     setScanResult(null)
     setSelectedPosts(new Set())
+    setStep('find')
 
     try {
       const res = await fetch('/api/ghost/scan', {
@@ -59,8 +64,6 @@ export function LinkScanner() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pattern: pattern.trim(),
-          replacement: replacement.trim() || undefined,
-          preservePath,
         }),
       })
 
@@ -72,10 +75,6 @@ export function LinkScanner() {
       }
 
       setScanResult(data)
-
-      // Select all posts by default
-      const allPostIds = new Set(data.posts.map((p: PostWithLinks) => p.id))
-      setSelectedPosts(allPostIds)
 
       if (data.matchingPosts === 0) {
         addToast('info', 'No matching links found')
@@ -115,6 +114,50 @@ export function LinkScanner() {
     }
   }
 
+  const handleProceedToReplace = () => {
+    if (selectedPosts.size === 0) {
+      addToast('error', 'Please select at least one post')
+      return
+    }
+    setStep('replace')
+  }
+
+  const handlePreview = async () => {
+    if (!replacement.trim()) {
+      addToast('error', 'Please enter a replacement pattern')
+      return
+    }
+
+    // Compute preview data with replacements
+    try {
+      const res = await fetch('/api/ghost/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pattern: pattern.trim(),
+          replacement: replacement.trim(),
+          preservePath,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        addToast('error', data.error || 'Preview failed')
+        return
+      }
+
+      // Filter to only selected posts
+      const selectedData = data.posts.filter((p: PostWithLinks) =>
+        selectedPosts.has(p.id)
+      )
+      setPreviewData(selectedData)
+      setIsPreviewOpen(true)
+    } catch (error) {
+      addToast('error', 'Failed to generate preview')
+    }
+  }
+
   const handleUpdate = async () => {
     if (selectedPosts.size === 0) {
       addToast('error', 'Please select at least one post')
@@ -147,10 +190,12 @@ export function LinkScanner() {
         `Updated ${data.postsUpdated} posts with ${data.totalLinksUpdated} link changes`
       )
 
-      // Clear results after successful update
+      // Reset everything
       setScanResult(null)
       setSelectedPosts(new Set())
       setIsPreviewOpen(false)
+      setStep('find')
+      setReplacement('')
     } catch (error) {
       addToast('error', 'Failed to update posts')
     } finally {
@@ -158,108 +203,95 @@ export function LinkScanner() {
     }
   }
 
-  const selectedPostsData = scanResult?.posts.filter((p) =>
-    selectedPosts.has(p.id)
-  ) || []
+  const handleReset = () => {
+    setScanResult(null)
+    setSelectedPosts(new Set())
+    setStep('find')
+    setReplacement('')
+    setPattern('')
+  }
 
-  const totalSelectedLinks = selectedPostsData.reduce(
-    (sum, p) => sum + p.links.length,
-    0
-  )
+  const totalSelectedLinks = scanResult?.posts
+    .filter((p) => selectedPosts.has(p.id))
+    .reduce((sum, p) => sum + p.links.length, 0) || 0
 
   return (
     <>
       <div className="space-y-6">
-        {/* Description */}
-        <p className="text-ghost-text-secondary">
-          Find and replace links across all your Ghost posts. Enter a domain pattern to search for and optionally specify a replacement.
-        </p>
-
-        {/* Search Form */}
-        <div
-          className="p-6 rounded-xl border border-ghost-border bg-ghost-surface space-y-4"
-          onKeyDown={handleKeyDown}
-        >
-          <div className="grid gap-4 md:grid-cols-2">
-            <Input
-              label="Find pattern"
-              placeholder="docs.last9.io"
-              value={pattern}
-              onChange={(e) => setPattern(e.target.value)}
-              hint="Domain or URL prefix to search for"
-            />
-            <Input
-              label="Replace with"
-              placeholder="newdocs.last9.io"
-              value={replacement}
-              onChange={(e) => setReplacement(e.target.value)}
-              hint="New domain or URL prefix"
-            />
+        {/* Step 1: Find */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-7 h-7 rounded-full bg-ghost-green text-ghost-bg text-sm font-bold">
+                1
+              </div>
+              <h3 className="font-semibold text-ghost-text">Find Links</h3>
+            </div>
+            {scanResult && (
+              <Button variant="ghost" size="sm" onClick={handleReset}>
+                <X className="h-4 w-4 mr-1" />
+                Reset
+              </Button>
+            )}
           </div>
 
-          <div className="flex items-center justify-between">
-            <Checkbox
-              label="Preserve path structure"
-              checked={preservePath}
-              onChange={(e) => setPreservePath(e.target.checked)}
-            />
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-ghost-text-muted hidden sm:inline">
-                ⌘+Enter to scan
-              </span>
-              <Button onClick={handleScan} loading={isScanning}>
+          <div
+            className="p-5 rounded-xl border border-ghost-border bg-ghost-surface"
+            onKeyDown={handleKeyDown}
+          >
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <Input
+                  placeholder="Enter domain or URL pattern (e.g., docs.last9.io)"
+                  value={pattern}
+                  onChange={(e) => setPattern(e.target.value)}
+                  disabled={!!scanResult}
+                />
+              </div>
+              <Button
+                onClick={handleScan}
+                loading={isScanning}
+                disabled={!!scanResult}
+              >
                 <Search className="h-4 w-4 mr-2" />
-                {isScanning ? 'Scanning...' : 'Scan Posts'}
+                {isScanning ? 'Scanning...' : 'Find'}
               </Button>
             </div>
+            <p className="text-xs text-ghost-text-muted mt-2">
+              Search for links containing this pattern across all your Ghost posts
+            </p>
           </div>
-
-          {/* Pattern Preview */}
-          {pattern && replacement && (
-            <div className="p-4 rounded-lg bg-ghost-bg border border-ghost-border">
-              <p className="text-xs text-ghost-text-muted mb-2 uppercase tracking-wide">
-                Preview
-              </p>
-              <div className="flex items-center gap-3 text-sm font-mono flex-wrap">
-                <span className="text-ghost-error line-through opacity-70">
-                  {pattern}/example/path
-                </span>
-                <ArrowRight className="h-4 w-4 text-ghost-text-muted flex-shrink-0" />
-                <span className="text-ghost-green">
-                  {replacement}
-                  {preservePath ? '/example/path' : ''}
-                </span>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Results */}
         {scanResult && scanResult.posts.length > 0 && (
           <div className="space-y-4 animate-fade-in">
+            {/* Results Header */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <h3 className="font-semibold text-ghost-text">Results</h3>
-                <Badge variant="secondary">
-                  {scanResult.matchingPosts} posts
+                <Badge variant="default">
+                  {scanResult.matchingPosts} posts found
                 </Badge>
                 <Badge variant="secondary">
-                  {scanResult.totalLinks} links
+                  {scanResult.totalLinks} total links
                 </Badge>
               </div>
-              <Button variant="ghost" size="sm" onClick={toggleAll}>
-                {selectedPosts.size === scanResult.posts.length
-                  ? 'Deselect All'
-                  : 'Select All'}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={toggleAll}>
+                  {selectedPosts.size === scanResult.posts.length
+                    ? 'Deselect All'
+                    : 'Select All'}
+                </Button>
+              </div>
             </div>
 
             {/* Posts List */}
-            <div className="border border-ghost-border rounded-xl overflow-hidden divide-y divide-ghost-border bg-ghost-surface">
+            <div className="border border-ghost-border rounded-xl overflow-hidden divide-y divide-ghost-border bg-ghost-surface max-h-[400px] overflow-y-auto">
               {scanResult.posts.map((post) => (
                 <div
                   key={post.id}
-                  className={`flex items-start gap-4 p-4 transition-colors ${
+                  onClick={() => togglePost(post.id)}
+                  className={`flex items-start gap-4 p-4 transition-colors cursor-pointer ${
                     selectedPosts.has(post.id)
                       ? 'bg-ghost-green-muted/20'
                       : 'hover:bg-ghost-surface-hover'
@@ -282,30 +314,23 @@ export function LinkScanner() {
                       >
                         {post.status}
                       </Badge>
+                      <Badge variant="outline">
+                        {post.links.length} {post.links.length === 1 ? 'link' : 'links'}
+                      </Badge>
                     </div>
-                    <div className="space-y-1">
-                      {post.links.slice(0, 3).map((link, i) => (
+                    <div className="space-y-1 mt-2">
+                      {post.links.slice(0, 2).map((link, i) => (
                         <div
                           key={i}
-                          className="flex items-center gap-2 text-sm"
+                          className="flex items-center gap-2 text-xs text-ghost-text-muted font-mono"
                         >
-                          <Link2 className="h-3 w-3 text-ghost-text-muted flex-shrink-0" />
-                          <span className="text-ghost-error line-through truncate text-xs">
-                            {link.original}
-                          </span>
-                          {link.replacement && (
-                            <>
-                              <ArrowRight className="h-3 w-3 text-ghost-text-muted flex-shrink-0" />
-                              <span className="text-ghost-green truncate text-xs">
-                                {link.replacement}
-                              </span>
-                            </>
-                          )}
+                          <Link2 className="h-3 w-3 flex-shrink-0" />
+                          <span className="truncate">{link.original}</span>
                         </div>
                       ))}
-                      {post.links.length > 3 && (
+                      {post.links.length > 2 && (
                         <p className="text-xs text-ghost-text-muted pl-5">
-                          +{post.links.length - 3} more links
+                          +{post.links.length - 2} more
                         </p>
                       )}
                     </div>
@@ -314,7 +339,10 @@ export function LinkScanner() {
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 flex-shrink-0"
-                    onClick={() => window.open(post.url, '_blank')}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      window.open(post.url, '_blank')
+                    }}
                     title="View post"
                   >
                     <ExternalLink className="h-4 w-4" />
@@ -323,20 +351,20 @@ export function LinkScanner() {
               ))}
             </div>
 
-            {/* Action Bar */}
-            {replacement && (
-              <div className="flex items-center justify-between p-4 rounded-xl bg-ghost-surface border border-ghost-border">
-                <div className="text-sm text-ghost-text-secondary">
-                  <span className="font-medium text-ghost-text">
+            {/* Selection Summary & Next Step */}
+            {selectedPosts.size > 0 && step === 'find' && (
+              <div className="flex items-center justify-between p-4 rounded-xl bg-ghost-green-muted/20 border border-ghost-green/30">
+                <div className="text-sm">
+                  <span className="font-semibold text-ghost-green">
                     {selectedPosts.size}
                   </span>{' '}
-                  posts selected ({totalSelectedLinks} links)
+                  <span className="text-ghost-text-secondary">
+                    posts selected ({totalSelectedLinks} links)
+                  </span>
                 </div>
-                <Button
-                  onClick={() => setIsPreviewOpen(true)}
-                  disabled={selectedPosts.size === 0}
-                >
-                  Preview Changes
+                <Button onClick={handleProceedToReplace}>
+                  Continue to Replace
+                  <ArrowRight className="h-4 w-4 ml-2" />
                 </Button>
               </div>
             )}
@@ -345,11 +373,78 @@ export function LinkScanner() {
 
         {/* Empty State */}
         {scanResult && scanResult.posts.length === 0 && (
-          <div className="text-center py-16 animate-fade-in">
+          <div className="text-center py-12 animate-fade-in">
             <Search className="h-12 w-12 text-ghost-text-muted mx-auto mb-3" />
             <p className="text-ghost-text-secondary">
               No posts found with links matching &quot;{pattern}&quot;
             </p>
+            <Button variant="secondary" className="mt-4" onClick={handleReset}>
+              Try Another Search
+            </Button>
+          </div>
+        )}
+
+        {/* Step 2: Replace */}
+        {step === 'replace' && selectedPosts.size > 0 && (
+          <div className="space-y-4 animate-fade-in">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-7 h-7 rounded-full bg-ghost-green text-ghost-bg text-sm font-bold">
+                2
+              </div>
+              <h3 className="font-semibold text-ghost-text">Replace With</h3>
+            </div>
+
+            <div className="p-5 rounded-xl border border-ghost-border bg-ghost-surface space-y-4">
+              <div>
+                <Input
+                  label="Replacement pattern"
+                  placeholder="newdocs.last9.io"
+                  value={replacement}
+                  onChange={(e) => setReplacement(e.target.value)}
+                  hint="The new domain or URL prefix"
+                />
+              </div>
+
+              <Checkbox
+                label="Preserve path structure"
+                checked={preservePath}
+                onChange={(e) => setPreservePath(e.target.checked)}
+              />
+
+              {/* Preview */}
+              {pattern && replacement && (
+                <div className="p-4 rounded-lg bg-ghost-bg border border-ghost-border">
+                  <p className="text-xs text-ghost-text-muted mb-2 uppercase tracking-wide">
+                    Preview
+                  </p>
+                  <div className="flex items-center gap-3 text-sm font-mono flex-wrap">
+                    <span className="text-ghost-error line-through opacity-70">
+                      {pattern}/example/path
+                    </span>
+                    <ArrowRight className="h-4 w-4 text-ghost-text-muted flex-shrink-0" />
+                    <span className="text-ghost-green">
+                      {replacement}
+                      {preservePath ? '/example/path' : ''}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => setStep('find')}
+                >
+                  Back to Selection
+                </Button>
+                <Button
+                  onClick={handlePreview}
+                  disabled={!replacement.trim()}
+                >
+                  Preview {selectedPosts.size} Posts
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -358,7 +453,7 @@ export function LinkScanner() {
       <PreviewModal
         open={isPreviewOpen}
         onClose={() => setIsPreviewOpen(false)}
-        posts={selectedPostsData}
+        posts={previewData}
         pattern={pattern}
         replacement={replacement}
         onConfirm={handleUpdate}
