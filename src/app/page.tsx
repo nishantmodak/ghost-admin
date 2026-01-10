@@ -1,39 +1,54 @@
 'use client'
 
 import * as React from 'react'
-import { Ghost, Github } from 'lucide-react'
-import { ConnectionManager } from '@/components/ConnectionManager'
+import { Github } from 'lucide-react'
+import { Sidebar } from '@/components/Sidebar'
 import { LinkScanner } from '@/components/LinkScanner'
+import { SettingsView } from '@/components/SettingsView'
+import { ConnectionStatus } from '@/components/ConnectionStatus'
 import { Button } from '@/components/ui/button'
 
 export default function Home() {
+  const [activeTab, setActiveTab] = React.useState('link-replacer')
   const [connectionKey, setConnectionKey] = React.useState(0)
 
   const handleConnectionChange = () => {
-    // Force re-render of components that depend on connection
     setConnectionKey((k) => k + 1)
   }
 
+  const handleSettingsClick = () => {
+    setActiveTab('settings')
+  }
+
   return (
-    <div className="min-h-screen">
-      {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-ghost-border bg-ghost-bg/80 backdrop-blur-sm">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-ghost-green-muted">
-                <Ghost className="h-6 w-6 text-ghost-green" />
-              </div>
-              <div>
-                <h1 className="text-lg font-semibold text-ghost-text">
-                  Ghost Scripts
-                </h1>
-                <p className="text-xs text-ghost-text-muted">
-                  Admin Toolkit
-                </p>
-              </div>
+    <div className="min-h-screen bg-ghost-bg">
+      {/* Sidebar */}
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+
+      {/* Main Content */}
+      <main className="pl-64">
+        {/* Top Bar */}
+        <header className="sticky top-0 z-30 border-b border-ghost-border bg-ghost-bg/80 backdrop-blur-sm">
+          <div className="flex items-center justify-between h-14 px-6">
+            <div>
+              {activeTab === 'link-replacer' && (
+                <h2 className="text-lg font-semibold text-ghost-text">
+                  Link Replacer
+                </h2>
+              )}
+              {activeTab === 'settings' && (
+                <h2 className="text-lg font-semibold text-ghost-text">
+                  Settings
+                </h2>
+              )}
+              {activeTab === 'media-browser' && (
+                <h2 className="text-lg font-semibold text-ghost-text">
+                  Media Browser
+                </h2>
+              )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              <ConnectionStatus onSettingsClick={handleSettingsClick} />
               <Button
                 variant="ghost"
                 size="sm"
@@ -44,79 +59,53 @@ export default function Home() {
                   )
                 }
               >
-                <Github className="h-4 w-4 mr-2" />
-                GitHub
+                <Github className="h-4 w-4" />
               </Button>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Main Content */}
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="space-y-8">
-          {/* Welcome Banner - shown only when no connection */}
-          <div className="relative overflow-hidden rounded-2xl border border-ghost-border bg-gradient-to-br from-ghost-surface to-ghost-bg p-8">
-            <div className="relative z-10">
-              <h2 className="text-2xl font-bold text-ghost-text mb-2">
-                Welcome to Ghost Scripts
-              </h2>
-              <p className="text-ghost-text-secondary max-w-xl">
-                A powerful toolkit to manage your Ghost blog. Find and replace
-                broken links, bulk edit posts, and more — all from a clean local
-                interface.
-              </p>
+        {/* Page Content */}
+        <div className="p-6 max-w-4xl">
+          {activeTab === 'link-replacer' && (
+            <div key={connectionKey} className="animate-fade-in">
+              <LinkScanner />
             </div>
-            {/* Decorative gradient */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-ghost-green/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-          </div>
+          )}
 
-          {/* Connection Manager */}
-          <ConnectionManager onConnectionChange={handleConnectionChange} />
+          {activeTab === 'settings' && (
+            <div className="animate-fade-in">
+              <SettingsView onConnectionChange={handleConnectionChange} />
+            </div>
+          )}
 
-          {/* Tools */}
-          <div key={connectionKey}>
-            <LinkScanner />
-          </div>
-
-          {/* Coming Soon */}
-          <div className="grid gap-4 md:grid-cols-2">
-            <ComingSoonCard
+          {activeTab === 'media-browser' && (
+            <ComingSoonView
               title="Media Browser"
-              description="Browse, search, and manage all images across your posts"
+              description="Browse all uploaded images, find unused assets, and detect duplicates across your Ghost posts."
             />
-            <ComingSoonCard
+          )}
+
+          {activeTab === 'revisions' && (
+            <ComingSoonView
               title="Revision History"
-              description="View and restore from Ghost's hidden revision history"
+              description="View and restore from Ghost's hidden revision history. Compare changes between versions."
             />
-            <ComingSoonCard
-              title="SEO Auditor"
-              description="Check meta descriptions, alt tags, and more"
+          )}
+
+          {activeTab === 'seo-audit' && (
+            <ComingSoonView
+              title="SEO Audit"
+              description="Check meta descriptions, missing alt tags, duplicate titles, and other SEO issues."
             />
-            <ComingSoonCard
-              title="Redirect Manager"
-              description="Visual UI for managing 301 redirects"
-            />
-          </div>
+          )}
         </div>
       </main>
-
-      {/* Footer */}
-      <footer className="border-t border-ghost-border mt-16">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between text-sm text-ghost-text-muted">
-            <p>
-              Ghost Scripts is not affiliated with Ghost Foundation.
-            </p>
-            <p>MIT License</p>
-          </div>
-        </div>
-      </footer>
     </div>
   )
 }
 
-function ComingSoonCard({
+function ComingSoonView({
   title,
   description,
 }: {
@@ -124,14 +113,15 @@ function ComingSoonCard({
   description: string
 }) {
   return (
-    <div className="p-6 rounded-xl border border-ghost-border border-dashed bg-ghost-surface/30 opacity-60">
-      <div className="flex items-center gap-2 mb-2">
-        <h3 className="font-medium text-ghost-text">{title}</h3>
-        <span className="text-xs px-2 py-0.5 rounded-full bg-ghost-surface-hover text-ghost-text-muted">
-          Coming Soon
-        </span>
+    <div className="flex flex-col items-center justify-center py-20 animate-fade-in">
+      <div className="w-16 h-16 rounded-2xl bg-ghost-surface-hover flex items-center justify-center mb-6">
+        <span className="text-3xl">🚧</span>
       </div>
-      <p className="text-sm text-ghost-text-muted">{description}</p>
+      <h2 className="text-xl font-semibold text-ghost-text mb-2">{title}</h2>
+      <p className="text-ghost-text-secondary text-center max-w-md">
+        {description}
+      </p>
+      <p className="text-sm text-ghost-text-muted mt-4">Coming soon</p>
     </div>
   )
 }
