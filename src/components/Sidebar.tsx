@@ -11,6 +11,12 @@ interface SidebarProps {
 
 const navItems = [
   {
+    id: 'posts',
+    label: 'All Posts',
+    icon: FileText,
+    available: true,
+  },
+  {
     id: 'link-replacer',
     label: 'Link Replacer',
     icon: Link2,

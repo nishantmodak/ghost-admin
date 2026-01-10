@@ -3,13 +3,23 @@
 import * as React from 'react'
 import { Github } from 'lucide-react'
 import { Sidebar } from '@/components/Sidebar'
+import { PostsView } from '@/components/PostsView'
 import { LinkScanner } from '@/components/LinkScanner'
 import { SettingsView } from '@/components/SettingsView'
 import { ConnectionStatus } from '@/components/ConnectionStatus'
 import { Button } from '@/components/ui/button'
 
+const pageTitles: Record<string, string> = {
+  posts: 'All Posts',
+  'link-replacer': 'Link Replacer',
+  'media-browser': 'Media Browser',
+  revisions: 'Revisions',
+  'seo-audit': 'SEO Audit',
+  settings: 'Settings',
+}
+
 export default function Home() {
-  const [activeTab, setActiveTab] = React.useState('link-replacer')
+  const [activeTab, setActiveTab] = React.useState('posts')
   const [connectionKey, setConnectionKey] = React.useState(0)
 
   const handleConnectionChange = () => {
@@ -30,23 +40,9 @@ export default function Home() {
         {/* Top Bar */}
         <header className="sticky top-0 z-30 border-b border-ghost-border bg-ghost-bg/80 backdrop-blur-sm">
           <div className="flex items-center justify-between h-14 px-6">
-            <div>
-              {activeTab === 'link-replacer' && (
-                <h2 className="text-lg font-semibold text-ghost-text">
-                  Link Replacer
-                </h2>
-              )}
-              {activeTab === 'settings' && (
-                <h2 className="text-lg font-semibold text-ghost-text">
-                  Settings
-                </h2>
-              )}
-              {activeTab === 'media-browser' && (
-                <h2 className="text-lg font-semibold text-ghost-text">
-                  Media Browser
-                </h2>
-              )}
-            </div>
+            <h2 className="text-lg font-semibold text-ghost-text">
+              {pageTitles[activeTab] || activeTab}
+            </h2>
             <div className="flex items-center gap-3">
               <ConnectionStatus onSettingsClick={handleSettingsClick} />
               <Button
@@ -66,7 +62,13 @@ export default function Home() {
         </header>
 
         {/* Page Content */}
-        <div className="p-6 max-w-4xl">
+        <div className="p-6 max-w-5xl">
+          {activeTab === 'posts' && (
+            <div key={connectionKey} className="animate-fade-in">
+              <PostsView />
+            </div>
+          )}
+
           {activeTab === 'link-replacer' && (
             <div key={connectionKey} className="animate-fade-in">
               <LinkScanner />
