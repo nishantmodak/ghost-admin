@@ -1,120 +1,158 @@
 # Ghost Scripts
 
-A local Rails-based admin toolkit for [Ghost CMS](https://ghost.io) that addresses common pain points and limitations of the default Ghost Admin UI.
+A local admin toolkit for [Ghost CMS](https://ghost.io) that addresses common pain points and limitations of the default Ghost Admin UI.
+
+![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?logo=typescript)
+![License](https://img.shields.io/badge/License-MIT-green)
+
+## Features
+
+### Link Replacer (Available Now)
+
+Find and replace links across all your Ghost posts with pattern matching.
+
+- **Pattern Matching** - Replace `docs.old-domain.io/path` with `docs.new-domain.io/path`
+- **Preview Mode** - Review all changes in a diff view before applying
+- **Selective Updates** - Choose which posts to update
+- **Path Preservation** - Automatically preserves URL path structure
+
+### Coming Soon
+
+- **Media Browser** - Browse all uploaded images, find unused assets, detect duplicates
+- **Revision History** - View and restore from Ghost's hidden revision history
+- **SEO Auditor** - Check meta descriptions, missing alt tags, duplicate titles
+- **Redirect Manager** - Visual UI for managing 301 redirects
 
 ## The Problem
 
-Ghost is a powerful, modern publishing platform with a clean interface. However, as sites grow and workflows become more complex, several limitations emerge that make day-to-day content management frustrating:
-
-### Content Management Gaps
+Ghost is a powerful, modern publishing platform. However, as sites grow, several limitations emerge:
 
 | Problem | Impact |
 |---------|--------|
-| **No Media Library** | Images must be re-uploaded for every post. No way to browse or reuse existing assets. |
-| **No Version Control UI** | Ghost stores up to 10 revisions internally, but provides no interface to view or restore them. |
-| **Limited Bulk Operations** | Native bulk actions limited to tags, access, and featured status. Cannot mass-edit authors, URLs, or content. |
-| **No Find & Replace** | To update text across posts, you must export JSON, edit manually, and re-import. |
-| **No Built-in Broken Link Checker** | External tools required to detect dead links in your content. |
+| **No Find & Replace** | Must export JSON, edit manually, and re-import |
+| **No Media Library** | Images must be re-uploaded for every post |
+| **No Version Control UI** | Revisions stored but no interface to view/restore |
+| **Limited Bulk Operations** | Cannot mass-edit URLs, content, or metadata |
 
-### Performance & Scale Issues
+See [Ghost Forum discussions](https://forum.ghost.org/t/find-replace-broken-links/47485) for community feedback on these issues.
 
-| Problem | Impact |
-|---------|--------|
-| **Slow Admin Search** | On large sites (10k+ posts), search performs multiple queries causing noticeable lag. |
-| **API Pagination Limits** | `limit=all` removed; max 100 items per page makes bulk operations tedious. |
-| **Database Migration Challenges** | SQLite to MySQL migrations (required in Ghost 5.x) often cause connection errors. |
+## Tech Stack
 
-### Editorial Workflow Limitations
+- **Framework**: Next.js 14 (App Router)
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS with Ghost-inspired dark theme
+- **Ghost Integration**: Official `@tryghost/admin-api` SDK
+- **Database**: SQLite (for storing connections locally)
 
-| Problem | Impact |
-|---------|--------|
-| **No Editorial Review Process** | No approval workflows for multi-author publications. Changes go live immediately. |
-| **No Diff View** | Cannot see what changed between revisions or who made edits. |
-| **Limited Audit Trail** | No comprehensive log of content changes over time. |
+## Quick Start
 
-### SEO & Technical Gaps
+### Prerequisites
 
-| Problem | Impact |
-|---------|--------|
-| **Manual Redirect Management** | No UI for managing 301 redirects; requires editing `redirects.json` manually. |
-| **Limited Meta Control** | Adding `nofollow` attributes requires switching to HTML blocks. |
-| **No Canonical URL Bulk Updates** | Must edit posts individually to fix canonical URLs after migrations. |
+- Node.js 18+
+- npm or yarn
+- A Ghost site with Admin API access
 
-### Sources
-
-These issues are documented across the Ghost community:
-- [Ghost Forum: Media Library Functionality](https://forum.ghost.org/t/media-library-functionality/10961)
-- [Ghost Forum: Article History/Revisions](https://forum.ghost.org/t/article-history-revisions/2892)
-- [Ghost Forum: Find/Replace Broken Links](https://forum.ghost.org/t/find-replace-broken-links/47485)
-- [Ghost Forum: Admin UI Search is Slow](https://forum.ghost.org/t/ghost-admin-ui-search-is-slow/59353)
-- [Ghost Forum: Bulk Actions for Posts](https://forum.ghost.org/t/bulk-actions-for-posts-in-admin/15781)
-- [Ghost Forum: Can Ghost Identify Dead Links?](https://forum.ghost.org/t/can-ghost-identify-dead-links/4348)
-- [Medevel: Ghost CMS Problems](https://medevel.com/ghost-cms-a-brilliant-idea-haunted-by-serious-problems/)
-
-## Our Solution
-
-Ghost Scripts provides a local Rails application that connects to your Ghost instance via the Admin API, offering tools that Ghost's native admin lacks:
-
-### Planned Features
-
-- **Broken Link Scanner** - Crawl all posts and identify dead internal/external links with one-click fixes
-- **Bulk Content Editor** - Find & replace across all posts, mass update authors, tags, and metadata
-- **Revision Browser** - View and restore from Ghost's hidden revision history
-- **Media Browser** - Browse all uploaded images, find unused assets, detect duplicates
-- **Redirect Manager** - Visual UI for managing 301 redirects without editing JSON
-- **SEO Auditor** - Check meta descriptions, missing alt tags, duplicate titles
-- **Content Health Dashboard** - Overview of drafts, orphaned tags, broken embeds
-- **Export Tools** - Backup content to Markdown, with Git-friendly version control
-
-## Requirements
-
-- Ruby 3.2+
-- Rails 7.1+
-- A Ghost instance (self-hosted or Ghost Pro) with Admin API access
-
-## Installation
+### Installation
 
 ```bash
-git clone https://github.com/yourusername/ghost-scripts.git
-cd ghost-scripts
-bundle install
-rails db:setup
+# Clone the repository
+git clone https://github.com/nishantmodak/ghost-admin.git
+cd ghost-admin
+
+# Install dependencies
+npm install
+
+# Start the development server
+npm run dev
 ```
 
-## Configuration
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-1. Create a custom integration in your Ghost Admin (Settings → Integrations → Add custom integration)
-2. Copy your Admin API key
-3. Configure the connection:
+### Connecting to Ghost
 
-```bash
-cp .env.example .env
-# Edit .env with your Ghost URL and Admin API key
-```
-
-```env
-GHOST_URL=https://your-ghost-site.com
-GHOST_ADMIN_API_KEY=your-admin-api-key
-```
+1. Go to your Ghost Admin → Settings → Integrations
+2. Click "Add custom integration"
+3. Copy the **Admin API Key** (format: `id:secret`)
+4. In Ghost Scripts, click "Add Connection"
+5. Enter your Ghost URL and API key
 
 ## Usage
 
-```bash
-rails server
-# Open http://localhost:3000
-```
+### Finding and Replacing Links
+
+1. Enter the domain/pattern to find (e.g., `docs.old-domain.io`)
+2. Enter the replacement (e.g., `docs.new-domain.io`)
+3. Click "Scan Posts" to find all matching links
+4. Review the results and select which posts to update
+5. Click "Preview Changes" to see the diff
+6. Click "Apply Changes" to update your Ghost posts
 
 ## Development
 
 ```bash
-# Run tests
-bundle exec rspec
+# Start development server with hot reload
+npm run dev
+
+# Build for production
+npm run build
+
+# Start production server
+npm start
 
 # Run linter
-bundle exec rubocop
+npm run lint
+```
 
-# Start development server with auto-reload
-bin/dev
+### Project Structure
+
+```
+ghost-scripts/
+├── src/
+│   ├── app/
+│   │   ├── api/              # API routes
+│   │   │   ├── connections/  # Connection CRUD
+│   │   │   └── ghost/        # Ghost API proxies
+│   │   ├── layout.tsx        # Root layout
+│   │   └── page.tsx          # Main dashboard
+│   ├── components/
+│   │   ├── ui/               # Base UI components
+│   │   ├── ConnectionManager.tsx
+│   │   ├── LinkScanner.tsx
+│   │   └── PreviewModal.tsx
+│   └── lib/
+│       ├── db.ts             # SQLite operations
+│       ├── ghost.ts          # Ghost API client
+│       └── link-parser.ts    # Link extraction/replacement
+├── data/                     # SQLite database (gitignored)
+└── package.json
+```
+
+## API Reference
+
+### `POST /api/ghost/scan`
+
+Scan posts for matching links.
+
+```json
+{
+  "pattern": "old-domain.io",
+  "replacement": "new-domain.io",
+  "preservePath": true
+}
+```
+
+### `POST /api/ghost/update`
+
+Apply link replacements to selected posts.
+
+```json
+{
+  "pattern": "old-domain.io",
+  "replacement": "new-domain.io",
+  "preservePath": true,
+  "postIds": ["post-id-1", "post-id-2"]
+}
 ```
 
 ## Contributing
@@ -125,8 +163,6 @@ bin/dev
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
-
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
@@ -134,8 +170,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Acknowledgments
 
 - [Ghost](https://ghost.org) for building a great publishing platform
-- The Ghost community for documenting these pain points
-- [TryGhost/api-demos](https://github.com/TryGhost/api-demos) for API examples
+- [TryGhost/admin-api](https://github.com/TryGhost/SDK/tree/main/packages/admin-api) for the official SDK
 
 ## Disclaimer
 
