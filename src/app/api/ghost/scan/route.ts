@@ -1,18 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createGhostClient, fetchAllPosts } from '@/lib/ghost'
 import { scanPostsForLinks, preparePostUpdates } from '@/lib/link-parser'
+import { getActiveConnection, getConnectionById } from '@/lib/db'
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { url, key, pattern, replacement, preservePath = true } = body
-
-    if (!url || !key) {
-      return NextResponse.json(
-        { error: 'Missing Ghost credentials' },
-        { status: 400 }
-      )
-    }
+    const { pattern, replacement, preservePath = true, connectionId } = body
 
     if (!pattern) {
       return NextResponse.json(
@@ -21,7 +15,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const client = createGhostClient({ url, key })
+    // Get connection - either specified or active
+    let connection
+    if (connectionId) {
+      connection = getConnectionById(connectionId)
+    } else {
+      connection = getActiveConnection()
+    }
+
+    if (!connection) {
+      return NextResponse.json(
+        { error: 'No Ghost connection configured. Please add a connection first.' },
+        { status: 400 }
+      )
+    }
+
+    const client = createGhostClient({ url: connection.url, key: connection.admin_key })
     const posts = await fetchAllPosts(client)
 
     // If replacement is provided, prepare updates with before/after
