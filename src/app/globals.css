@@ -1,0 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-ghost-border;
+  }
+
+  body {
+    @apply bg-ghost-bg text-ghost-text antialiased;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-ghost-bg;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-ghost-border rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-ghost-border-light;
+  }
+
+  /* Selection */
+  ::selection {
+    @apply bg-ghost-green/30 text-ghost-text;
+  }
+}
+
+@layer components {
+  /* Focus ring styles */
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ghost-green focus-visible:ring-offset-2 focus-visible:ring-offset-ghost-bg;
+  }
+
+  /* Skeleton loading animation */
+  .skeleton {
+    @apply bg-ghost-surface-hover animate-pulse rounded;
+  }
+}
+
+@layer utilities {
+  /* Text gradient */
+  .text-gradient {
+    @apply bg-gradient-to-r from-ghost-green to-emerald-400 bg-clip-text text-transparent;
+  }
+
+  /* Subtle border glow */
+  .glow-border {
+    box-shadow: 0 0 0 1px rgba(48, 207, 67, 0.1),
+      0 0 20px -5px rgba(48, 207, 67, 0.15);
+  }
+}
