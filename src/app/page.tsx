@@ -5,6 +5,7 @@ import { Github } from 'lucide-react'
 import { Sidebar } from '@/components/Sidebar'
 import { PostsView } from '@/components/PostsView'
 import { LinkScanner } from '@/components/LinkScanner'
+import { ImageAltAuditor } from '@/components/ImageAltAuditor'
 import { SettingsView } from '@/components/SettingsView'
 import { ConnectionStatus } from '@/components/ConnectionStatus'
 import { Button } from '@/components/ui/button'
@@ -12,6 +13,7 @@ import { Button } from '@/components/ui/button'
 const pageTitles: Record<string, string> = {
   posts: 'All Posts',
   'link-replacer': 'Link Replacer',
+  'image-alts': 'Image Alt Auditor',
   'media-browser': 'Media Browser',
   revisions: 'Revisions',
   'seo-audit': 'SEO Audit',
@@ -72,6 +74,12 @@ export default function Home() {
           {activeTab === 'link-replacer' && (
             <div key={connectionKey} className="animate-fade-in">
               <LinkScanner />
+            </div>
+          )}
+
+          {activeTab === 'image-alts' && (
+            <div key={connectionKey} className="animate-fade-in">
+              <ImageAltAuditor />
             </div>
           )}
 

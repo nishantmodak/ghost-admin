@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Ghost, Link2, Settings, Image, History, Search, FileText } from 'lucide-react'
+import { Ghost, Link2, Settings, Image, History, Search, FileText, ImageOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface SidebarProps {
@@ -20,6 +20,12 @@ const navItems = [
     id: 'link-replacer',
     label: 'Link Replacer',
     icon: Link2,
+    available: true,
+  },
+  {
+    id: 'image-alts',
+    label: 'Image Alt Auditor',
+    icon: ImageOff,
     available: true,
   },
   {
