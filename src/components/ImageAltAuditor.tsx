@@ -44,13 +44,31 @@ interface PostWithImages {
   images: ImageMatch[]
 }
 
+interface ImageStats {
+  hasAlt: number
+  missingAlt: number
+  noFeatureImage?: number
+  noImages?: number
+}
+
+interface StatusCounts {
+  published: number
+  draft: number
+  scheduled: number
+}
+
 interface ScanResult {
   totalPosts: number
   postsWithIssues: number
   totalImages: number
   totalMissing: number
+  inlineImageStats: ImageStats
+  featureImageStats: ImageStats
+  statusCounts: StatusCounts
   posts: PostWithImages[]
 }
+
+type StatusFilter = 'all' | 'published' | 'draft'
 
 interface AltUpdate {
   postId: string
@@ -59,6 +77,7 @@ interface AltUpdate {
 }
 
 export function ImageAltAuditor() {
+  const [isLoading, setIsLoading] = React.useState(true)
   const [isScanning, setIsScanning] = React.useState(false)
   const [scanResult, setScanResult] = React.useState<ScanResult | null>(null)
   const [selectedPosts, setSelectedPosts] = React.useState<Set<string>>(new Set())
@@ -66,11 +85,37 @@ export function ImageAltAuditor() {
   const [altValues, setAltValues] = React.useState<Map<string, string>>(new Map())
   const [isPreviewOpen, setIsPreviewOpen] = React.useState(false)
   const [isUpdating, setIsUpdating] = React.useState(false)
+  const [updatingPostId, setUpdatingPostId] = React.useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = React.useState<StatusFilter>('all')
+  const [searchQuery, setSearchQuery] = React.useState('')
   const { addToast } = useToast()
 
-  const handleScan = async () => {
+  // Auto-load on mount
+  React.useEffect(() => {
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    setIsLoading(true)
+    try {
+      const res = await fetch('/api/ghost/images')
+      const data = await res.json()
+
+      if (!res.ok) {
+        addToast('error', data.error || 'Failed to load data')
+        return
+      }
+
+      setScanResult(data)
+    } catch (error) {
+      addToast('error', 'Failed to load data')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleRefresh = async () => {
     setIsScanning(true)
-    setScanResult(null)
     setSelectedPosts(new Set())
     setExpandedPosts(new Set())
     setAltValues(new Map())
@@ -85,21 +130,35 @@ export function ImageAltAuditor() {
       }
 
       setScanResult(data)
-
-      if (data.postsWithIssues === 0) {
-        addToast('success', 'All images have alt text!')
-      } else {
-        addToast(
-          'info',
-          `Found ${data.totalMissing} images without alt text in ${data.postsWithIssues} posts`
-        )
-      }
+      addToast('success', 'Data refreshed')
     } catch (error) {
-      addToast('error', 'Failed to scan posts')
+      addToast('error', 'Failed to refresh data')
     } finally {
       setIsScanning(false)
     }
   }
+
+  // Filter posts by status and search query
+  const filteredPosts = React.useMemo(() => {
+    if (!scanResult) return []
+    let posts = scanResult.posts
+
+    // Filter by status
+    if (statusFilter !== 'all') {
+      posts = posts.filter((p) => p.status === statusFilter)
+    }
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      posts = posts.filter((p) =>
+        p.title.toLowerCase().includes(query) ||
+        p.slug.toLowerCase().includes(query)
+      )
+    }
+
+    return posts
+  }, [scanResult, statusFilter, searchQuery])
 
   const togglePost = (postId: string) => {
     const newSelected = new Set(selectedPosts)
@@ -137,7 +196,7 @@ export function ImageAltAuditor() {
   }
 
   const setAltValue = (postId: string, src: string, value: string) => {
-    const key = `${postId}:${src}`
+    const key = `${postId}::${src}`
     const newAltValues = new Map(altValues)
     if (value.trim()) {
       newAltValues.set(key, value)
@@ -148,13 +207,30 @@ export function ImageAltAuditor() {
   }
 
   const getAltValue = (postId: string, src: string): string => {
-    return altValues.get(`${postId}:${src}`) || ''
+    return altValues.get(`${postId}::${src}`) || ''
+  }
+
+  const getUpdatesForPost = (postId: string): AltUpdate[] => {
+    const updates: AltUpdate[] = []
+    altValues.forEach((newAlt, key) => {
+      const separatorIndex = key.indexOf('::')
+      if (separatorIndex === -1) return
+      const keyPostId = key.slice(0, separatorIndex)
+      const src = key.slice(separatorIndex + 2)
+      if (keyPostId === postId && newAlt.trim()) {
+        updates.push({ postId: keyPostId, src, newAlt })
+      }
+    })
+    return updates
   }
 
   const getUpdatesForPreview = (): AltUpdate[] => {
     const updates: AltUpdate[] = []
     altValues.forEach((newAlt, key) => {
-      const [postId, src] = key.split(':')
+      const separatorIndex = key.indexOf('::')
+      if (separatorIndex === -1) return
+      const postId = key.slice(0, separatorIndex)
+      const src = key.slice(separatorIndex + 2)
       if (selectedPosts.has(postId) && newAlt.trim()) {
         updates.push({ postId, src, newAlt })
       }
@@ -169,6 +245,66 @@ export function ImageAltAuditor() {
       return
     }
     setIsPreviewOpen(true)
+  }
+
+  const applyPostUpdates = async (postId: string) => {
+    const updates = getUpdatesForPost(postId)
+    if (updates.length === 0) {
+      addToast('error', 'Please enter alt text for at least one image')
+      return
+    }
+
+    setUpdatingPostId(postId)
+
+    try {
+      const res = await fetch('/api/ghost/images/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        addToast('error', data.error || 'Update failed')
+        return
+      }
+
+      addToast('success', `Updated ${data.totalImagesUpdated} images in post`)
+
+      // Remove updated post from results and clear its alt values
+      if (scanResult) {
+        const newPosts = scanResult.posts.filter((p) => p.id !== postId)
+        setScanResult({
+          ...scanResult,
+          posts: newPosts,
+          postsWithIssues: newPosts.length,
+          totalMissing: newPosts.reduce((sum, p) => sum + p.images.length, 0),
+        })
+      }
+
+      // Clear alt values for this post
+      const newAltValues = new Map(altValues)
+      Array.from(newAltValues.keys()).forEach((key) => {
+        if (key.startsWith(`${postId}::`)) {
+          newAltValues.delete(key)
+        }
+      })
+      setAltValues(newAltValues)
+
+      // Remove from selected/expanded
+      const newSelected = new Set(selectedPosts)
+      newSelected.delete(postId)
+      setSelectedPosts(newSelected)
+
+      const newExpanded = new Set(expandedPosts)
+      newExpanded.delete(postId)
+      setExpandedPosts(newExpanded)
+    } catch (error) {
+      addToast('error', 'Failed to update post')
+    } finally {
+      setUpdatingPostId(null)
+    }
   }
 
   const handleUpdate = async () => {
@@ -199,9 +335,9 @@ export function ImageAltAuditor() {
         `Updated ${data.totalImagesUpdated} images across ${data.postsUpdated} posts`
       )
 
-      // Reset and rescan
+      // Reset and refresh
       setIsPreviewOpen(false)
-      handleScan()
+      handleRefresh()
     } catch (error) {
       addToast('error', 'Failed to update posts')
     } finally {
@@ -234,54 +370,93 @@ export function ImageAltAuditor() {
               Find and fix images missing alt text for better accessibility and SEO
             </p>
           </div>
-          {scanResult && (
-            <Button variant="ghost" size="sm" onClick={handleReset}>
-              <X className="h-4 w-4 mr-1" />
-              Reset
-            </Button>
-          )}
+          <Button variant="ghost" size="sm" onClick={handleRefresh} loading={isScanning}>
+            <Search className="h-4 w-4 mr-1" />
+            {isScanning ? 'Refreshing...' : 'Refresh'}
+          </Button>
         </div>
 
-        {/* Scan Button */}
-        {!scanResult && (
-          <div className="p-6 rounded-xl border border-ghost-border bg-ghost-surface text-center">
-            <ImageIcon className="h-12 w-12 text-ghost-text-muted mx-auto mb-4" />
-            <h3 className="font-medium text-ghost-text mb-2">
-              Scan for Missing Alt Text
-            </h3>
-            <p className="text-sm text-ghost-text-muted mb-4 max-w-md mx-auto">
-              Scan all your Ghost posts to find images without alt text. Alt text improves
-              accessibility and helps with SEO.
-            </p>
-            <Button onClick={handleScan} loading={isScanning}>
-              <Search className="h-4 w-4 mr-2" />
-              {isScanning ? 'Scanning...' : 'Start Scan'}
-            </Button>
+        {/* Loading State */}
+        {isLoading && (
+          <div className="p-12 rounded-xl border border-ghost-border bg-ghost-surface text-center">
+            <div className="animate-spin h-8 w-8 border-2 border-ghost-green border-t-transparent rounded-full mx-auto mb-4" />
+            <p className="text-sm text-ghost-text-muted">Loading image data...</p>
           </div>
         )}
 
-        {/* Results */}
-        {scanResult && scanResult.posts.length > 0 && (
+        {/* Stats Table */}
+        {!isLoading && scanResult && (
+          <div className="animate-fade-in">
+            <ImageStatsTable
+              featureStats={scanResult.featureImageStats}
+              inlineStats={scanResult.inlineImageStats}
+            />
+          </div>
+        )}
+
+        {/* Posts with Issues */}
+        {!isLoading && scanResult && scanResult.posts.length > 0 && (
           <div className="space-y-4 animate-fade-in">
-            {/* Stats */}
+            {/* Search and Filters */}
+            <div className="flex items-center gap-4">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ghost-text-muted" />
+                <Input
+                  placeholder="Search posts..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+
+              {/* Status Tabs */}
+              <div className="flex items-center rounded-lg border border-ghost-border bg-ghost-surface p-1">
+                <button
+                  onClick={() => setStatusFilter('all')}
+                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                    statusFilter === 'all'
+                      ? 'bg-ghost-green text-white'
+                      : 'text-ghost-text-muted hover:text-ghost-text'
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setStatusFilter('published')}
+                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                    statusFilter === 'published'
+                      ? 'bg-ghost-green text-white'
+                      : 'text-ghost-text-muted hover:text-ghost-text'
+                  }`}
+                >
+                  Published
+                </button>
+                <button
+                  onClick={() => setStatusFilter('draft')}
+                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                    statusFilter === 'draft'
+                      ? 'bg-ghost-green text-white'
+                      : 'text-ghost-text-muted hover:text-ghost-text'
+                  }`}
+                >
+                  Drafts
+                </button>
+              </div>
+            </div>
+
+            {/* Results Summary */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Badge variant="warning">
-                  {scanResult.postsWithIssues} posts with issues
-                </Badge>
-                <Badge variant="secondary">
-                  {scanResult.totalMissing} images missing alt
-                </Badge>
-                <Badge variant="outline">
-                  {scanResult.totalImages} total images
-                </Badge>
+                <span className="text-sm text-ghost-text-muted">
+                  Showing {filteredPosts.length} of {scanResult.posts.length} posts with missing alt text
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <Button variant="ghost" size="sm" onClick={expandAll}>
                   Expand All
                 </Button>
                 <Button variant="ghost" size="sm" onClick={toggleAll}>
-                  {selectedPosts.size === scanResult.posts.length
+                  {selectedPosts.size === filteredPosts.length
                     ? 'Deselect All'
                     : 'Select All'}
                 </Button>
@@ -290,7 +465,11 @@ export function ImageAltAuditor() {
 
             {/* Posts List */}
             <div className="border border-ghost-border rounded-xl overflow-hidden bg-ghost-surface">
-              {scanResult.posts.map((post) => (
+              {filteredPosts.length === 0 ? (
+                <div className="p-8 text-center text-ghost-text-muted">
+                  No posts match your filters
+                </div>
+              ) : filteredPosts.map((post) => (
                 <div
                   key={post.id}
                   className="border-b border-ghost-border last:border-b-0"
@@ -431,6 +610,20 @@ export function ImageAltAuditor() {
                           </div>
                         </div>
                       ))}
+
+                      {/* Per-post Apply Button */}
+                      {getUpdatesForPost(post.id).length > 0 && (
+                        <div className="flex justify-end pt-2 border-t border-ghost-border">
+                          <Button
+                            size="sm"
+                            onClick={() => applyPostUpdates(post.id)}
+                            loading={updatingPostId === post.id}
+                            disabled={updatingPostId !== null}
+                          >
+                            Apply {getUpdatesForPost(post.id).length} Changes to This Post
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -467,19 +660,16 @@ export function ImageAltAuditor() {
         )}
 
         {/* All Good State */}
-        {scanResult && scanResult.posts.length === 0 && (
+        {!isLoading && scanResult && scanResult.posts.length === 0 && (
           <div className="text-center py-12 animate-fade-in">
             <div className="w-16 h-16 rounded-full bg-ghost-green-muted flex items-center justify-center mx-auto mb-4">
               <Check className="h-8 w-8 text-ghost-green" />
             </div>
-            <h3 className="font-medium text-ghost-text mb-2">All Images Have Alt Text!</h3>
+            <h3 className="font-medium text-ghost-text mb-2">All Inline Images Have Alt Text!</h3>
             <p className="text-sm text-ghost-text-muted mb-4">
-              Great job! All {scanResult.totalImages} images across {scanResult.totalPosts}{' '}
+              Great job! All {scanResult.totalImages} inline images across {scanResult.totalPosts}{' '}
               posts have alt text.
             </p>
-            <Button variant="secondary" onClick={handleScan}>
-              Scan Again
-            </Button>
           </div>
         )}
       </div>
@@ -494,6 +684,115 @@ export function ImageAltAuditor() {
         isUpdating={isUpdating}
       />
     </>
+  )
+}
+
+// Combined Image Stats Table Component
+function ImageStatsTable({
+  featureStats,
+  inlineStats,
+}: {
+  featureStats: ImageStats
+  inlineStats: ImageStats
+}) {
+  const featureTotal = featureStats.hasAlt + featureStats.missingAlt + (featureStats.noFeatureImage || 0)
+  const inlineTotal = inlineStats.hasAlt + inlineStats.missingAlt
+
+  const getPercent = (value: number, total: number) => {
+    if (total === 0) return '0%'
+    const pct = (value / total) * 100
+    if (pct > 0 && pct < 1) return '<1%'
+    return `${Math.round(pct)}%`
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Feature Image Stats */}
+      <div className="rounded-xl border border-ghost-border overflow-hidden bg-ghost-surface">
+        <div className="px-4 py-3 bg-ghost-surface-hover border-b border-ghost-border">
+          <h3 className="font-medium text-ghost-text text-sm">Feature Image Alt</h3>
+        </div>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-ghost-border bg-ghost-bg/50">
+              <th className="px-4 py-2 text-left font-medium text-ghost-text-muted">Status</th>
+              <th className="px-4 py-2 text-right font-medium text-ghost-text-muted w-16">Count</th>
+              <th className="px-4 py-2 text-right font-medium text-ghost-text-muted w-14">%</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="border-b border-ghost-border">
+              <td className="px-4 py-2">
+                <span className="inline-flex items-center gap-2">
+                  <span className="text-ghost-green">✓</span>
+                  <span className="text-ghost-text">Has alt text</span>
+                </span>
+              </td>
+              <td className="px-4 py-2 text-right font-mono text-ghost-text">{featureStats.hasAlt}</td>
+              <td className="px-4 py-2 text-right font-mono text-ghost-text-muted">{getPercent(featureStats.hasAlt, featureTotal)}</td>
+            </tr>
+            <tr className="border-b border-ghost-border">
+              <td className="px-4 py-2">
+                <span className="inline-flex items-center gap-2">
+                  <span className="text-red-500">✗</span>
+                  <span className="text-ghost-text">Missing alt text</span>
+                </span>
+              </td>
+              <td className="px-4 py-2 text-right font-mono text-ghost-text">{featureStats.missingAlt}</td>
+              <td className="px-4 py-2 text-right font-mono text-ghost-text-muted">{getPercent(featureStats.missingAlt, featureTotal)}</td>
+            </tr>
+            <tr>
+              <td className="px-4 py-2">
+                <span className="inline-flex items-center gap-2">
+                  <span className="text-ghost-text-muted">—</span>
+                  <span className="text-ghost-text">No feature image</span>
+                </span>
+              </td>
+              <td className="px-4 py-2 text-right font-mono text-ghost-text">{featureStats.noFeatureImage}</td>
+              <td className="px-4 py-2 text-right font-mono text-ghost-text-muted">{getPercent(featureStats.noFeatureImage || 0, featureTotal)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Inline Image Stats */}
+      <div className="rounded-xl border border-ghost-border overflow-hidden bg-ghost-surface">
+        <div className="px-4 py-3 bg-ghost-surface-hover border-b border-ghost-border">
+          <h3 className="font-medium text-ghost-text text-sm">Inline Image Alt</h3>
+        </div>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-ghost-border bg-ghost-bg/50">
+              <th className="px-4 py-2 text-left font-medium text-ghost-text-muted">Status</th>
+              <th className="px-4 py-2 text-right font-medium text-ghost-text-muted w-16">Count</th>
+              <th className="px-4 py-2 text-right font-medium text-ghost-text-muted w-14">%</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="border-b border-ghost-border">
+              <td className="px-4 py-2">
+                <span className="inline-flex items-center gap-2">
+                  <span className="text-ghost-green">✓</span>
+                  <span className="text-ghost-text">Has alt text</span>
+                </span>
+              </td>
+              <td className="px-4 py-2 text-right font-mono text-ghost-text">{inlineStats.hasAlt}</td>
+              <td className="px-4 py-2 text-right font-mono text-ghost-text-muted">{getPercent(inlineStats.hasAlt, inlineTotal)}</td>
+            </tr>
+            <tr>
+              <td className="px-4 py-2">
+                <span className="inline-flex items-center gap-2">
+                  <span className="text-red-500">✗</span>
+                  <span className="text-ghost-text">Missing alt text</span>
+                </span>
+              </td>
+              <td className="px-4 py-2 text-right font-mono text-ghost-text">{inlineStats.missingAlt}</td>
+              <td className="px-4 py-2 text-right font-mono text-ghost-text-muted">{getPercent(inlineStats.missingAlt, inlineTotal)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   )
 }
 

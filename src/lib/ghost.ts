@@ -15,6 +15,8 @@ export interface GhostPost {
   updated_at: string
   published_at: string | null
   url: string
+  feature_image: string | null
+  feature_image_alt: string | null
 }
 
 export interface GhostPostUpdate {
@@ -43,7 +45,7 @@ export async function fetchAllPosts(
       limit,
       page,
       formats: ['html'],
-      fields: ['id', 'uuid', 'title', 'slug', 'html', 'status', 'updated_at', 'published_at', 'url'],
+      fields: ['id', 'uuid', 'title', 'slug', 'html', 'status', 'updated_at', 'published_at', 'url', 'feature_image', 'feature_image_alt'],
     })
 
     if (!posts || posts.length === 0) {
