@@ -1,6 +1,7 @@
 export interface ImageMatch {
   src: string
   alt: string | null // null = missing, '' = empty
+  caption: string | null // figcaption text if exists
   context: string
   fullTag: string
   startIndex: number
@@ -52,6 +53,20 @@ export function extractImages(html: string): ImageMatch[] {
     const altMatch = fullTag.match(/alt=["']([^"']*)["']/i)
     const alt = altMatch ? altMatch[1] : null // null means no alt attribute
 
+    // Extract figcaption if exists (Ghost wraps images in <figure> with <figcaption>)
+    // Look for figcaption within ~500 chars after the img tag
+    const afterImg = html.slice(endIndex, Math.min(html.length, endIndex + 500))
+    const figcaptionMatch = afterImg.match(/<figcaption[^>]*>([\s\S]*?)<\/figcaption>/i)
+    let caption: string | null = null
+    if (figcaptionMatch) {
+      // Strip HTML tags from caption and clean up
+      caption = figcaptionMatch[1]
+        .replace(/<[^>]+>/g, '') // Remove HTML tags
+        .replace(/\s+/g, ' ') // Normalize whitespace
+        .trim()
+      if (!caption) caption = null // Convert empty string to null
+    }
+
     // Extract surrounding context (up to 50 chars before and after)
     const contextStart = Math.max(0, startIndex - 50)
     const contextEnd = Math.min(html.length, endIndex + 50)
@@ -69,6 +84,7 @@ export function extractImages(html: string): ImageMatch[] {
     matches.push({
       src,
       alt,
+      caption,
       context,
       fullTag,
       startIndex,

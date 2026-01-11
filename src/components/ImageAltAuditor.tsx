@@ -30,6 +30,7 @@ import {
 interface ImageMatch {
   src: string
   alt: string | null
+  caption: string | null
   context: string
   fullTag: string
 }
@@ -391,7 +392,24 @@ export function ImageAltAuditor() {
                               </span>
                             </div>
 
-                            {image.context && (
+                            {image.caption && (
+                              <div className="flex items-center gap-2 p-2 rounded bg-ghost-bg border border-ghost-border">
+                                <span className="text-xs text-ghost-text-muted">Caption:</span>
+                                <span className="text-xs text-ghost-text flex-1 truncate">
+                                  {image.caption}
+                                </span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 text-xs px-2"
+                                  onClick={() => setAltValue(post.id, image.src, image.caption!)}
+                                >
+                                  Use as Alt
+                                </Button>
+                              </div>
+                            )}
+
+                            {!image.caption && image.context && (
                               <p className="text-xs text-ghost-text-muted line-clamp-2">
                                 Context: {image.context}
                               </p>
@@ -399,7 +417,7 @@ export function ImageAltAuditor() {
 
                             <div className="flex items-center gap-2">
                               <Input
-                                placeholder="Enter alt text..."
+                                placeholder={image.caption ? "Enter alt text or use caption above..." : "Enter alt text..."}
                                 value={getAltValue(post.id, image.src)}
                                 onChange={(e) =>
                                   setAltValue(post.id, image.src, e.target.value)
